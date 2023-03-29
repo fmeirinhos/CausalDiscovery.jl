@@ -6,6 +6,8 @@ using Combinatorics
 using LinearAlgebra
 using Distributions
 
+using .Iterators: filter
+
 include("independence.jl")
 export GaussianTest
 

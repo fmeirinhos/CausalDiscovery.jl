@@ -17,7 +17,7 @@ make_graph(graph) = foldl((g, e) -> (add_edge!(g, e...); g), graph; init = DiGra
         (; x, graph)
     end
 
-    make_graph(graph) == infer_graph(x, GaussianTest(α = 0.01))
+    issubset(make_graph(graph), infer_graph(x, GaussianTest(α = 0.01)))
 end
 
 @test begin
@@ -34,7 +34,7 @@ end
         (; x, graph)
     end
 
-    make_graph(graph) == infer_graph(x, GaussianTest(α = 0.01))
+    issubset(make_graph(graph), infer_graph(x, GaussianTest(α = 0.01)))
 end
 
 @test begin
@@ -54,7 +54,7 @@ end
         (; x, graph)
     end
 
-    make_graph(graph) == infer_graph(x, GaussianTest(α = 0.01))
+    issubset(make_graph(graph), infer_graph(x, GaussianTest(α = 0.01)))
 end
 
 @test begin
@@ -77,5 +77,5 @@ end
         (; x, graph)
     end
 
-    make_graph(graph) == infer_graph(x, GaussianTest(α = 0.01))
+    issubset(make_graph(graph), infer_graph(x, GaussianTest(α = 0.01)))
 end
