@@ -1,6 +1,6 @@
 module CausalDiscovery
 
-using Graphs
+using Graphs, MetaGraphsNext
 using Combinatorics
 
 using LinearAlgebra

@@ -3,7 +3,7 @@
 
 Infers the causal graph underlying the set of variables along the columns of `x`.
 """
-function infer_graph(x::AbstractMatrix, test::IndependenceTest)
+function infer_graph(x::AbstractMatrix, test::IndependenceTest; latent = false)
     # Find fixed point
     fix(f, x) =
         let
@@ -15,7 +15,7 @@ function infer_graph(x::AbstractMatrix, test::IndependenceTest)
     g, S = skeleton(complete_graph(size(x, 2)), independence_test(x, test))
 
     # Orient skeleton
-    dg = fix(rule3! ∘ rule2! ∘ rule1!, orient_colliders(g, S))
+    dg = fix(rule3! ∘ rule2! ∘ rule1!, ((latent ? assume_latent : identity) ∘ orient_colliders)(g, S))
 
     dg
 end
@@ -97,6 +97,71 @@ function rule3!(dg::SimpleDiGraph)
         end
     end
     dg
+end
+
+@enum ArrowType circle arrow
+
+function assume_latent(dg::SimpleDiGraph{T}) where {T}
+    mg = MetaGraph(DiGraph(); label_type=Int, edge_data_type=ArrowType)
+
+    for v ∈ vertices(dg)
+        mg[v] = nothing
+    end
+
+    for e ∈ edges(dg)
+        if has_edge(dg, reverse(e))
+            mg[src(e), dst(e)] = circle
+        else
+            mg[src(e), dst(e)] = arrow
+            mg[dst(e), src(e)] = circle
+        end
+    end
+    mg
+end
+
+# Orients a *-> b ∘-* c into a *-> b -> c if a and c are nonadjacent
+function rule1!(mg::MetaGraph)
+    for b ∈ vertices(mg)
+        for a ∈ filter(a -> mg[a, b] == arrow, inneighbors(mg, b)) |> collect
+            for c ∈ filter(c -> are_nonadjecent(mg, a, c), outneighbors(mg, b)) |> collect
+                if has_edge(mg, c, b) && mg[c, b] == circle && rem_edge!(mg, c, b)
+                    mg[b, c] = arrow
+                    @info "Promoting $b ∘-* $c to -> (Rule I)"
+                end
+            end
+        end
+    end
+    mg
+end
+
+# Orients a *-∘ c into a *-> c if a -> b *-> c or a *-> b -> c
+function rule2!(mg::MetaGraph)
+    for b ∈ vertices(mg)
+        for a ∈ filter(a -> mg[a, b] == arrow, inneighbors(mg, b)) |> collect
+            for c ∈ filter(c -> mg[b, c] == arrow, outneighbors(mg, b)) |> collect
+                if (!has_edge(mg, b, a) || !has_edge(mg, c, b)) && (has_edge(mg, a, c) && mg[a, c] == circle)
+                    mg[a, c] = arrow
+                    @info "Promoting $a *-∘ $c to *–> (Rule II)"
+                end
+            end
+        end
+    end
+    mg
+end
+
+# Orients d *-∘ b into d *-> b if a *-> b <-* c, a *-∘ d ∘-* c, and a and c are nonadjacent
+function rule3!(mg::MetaGraph)
+    for b ∈ vertices(mg)
+        for (a, c) ∈ filter(x -> are_nonadjecent(mg, x...), combinations(filter(a -> mg[a, b] == arrow, inneighbors(mg, b)) |> collect, 2)) |> collect
+            for d ∈ filter(d -> has_edge(mg, a, d) && mg[a, d] == circle && has_edge(mg, c, d) && mg[c, d] == circle, setdiff(common_neighbors(mg, a, c), b))
+                if has_edge(mg, d, b) && mg[d, b] == circle
+                    mg[d, b] = arrow
+                    @info "Promoting $d *-∘ $b to *–> (Rule III)"
+                end
+            end
+        end
+    end
+    mg
 end
 
 are_nonadjecent(dg, a, b) = !has_edge(dg, a, b) && !has_edge(dg, b, a)
